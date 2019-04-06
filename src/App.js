@@ -6,6 +6,19 @@ import './App.css'
 import { MnistData } from './data.js'
 
 class App extends Component {
+  classNames = [
+    'Zero',
+    'One',
+    'Two',
+    'Three',
+    'Four',
+    'Five',
+    'Six',
+    'Seven',
+    'Eight',
+    'Nine',
+  ]
+
   async componentDidMount() {
     await this.run()
   }
@@ -94,7 +107,7 @@ class App extends Component {
     const optimizer = tf.train.adam()
     model.compile({
       optimizer,
-      loss: 'categoricalCrossEntropy',
+      loss: 'categoricalCrossentropy',
       metric: ['accuracy'],
     })
 
@@ -137,6 +150,47 @@ class App extends Component {
     })
   }
 
+  doPrediction(model, data, testDataSize = 500) {
+    const IMAGE_WIDTH = 28
+    const IMAGE_HEIGHT = 28
+
+    const testData = data.nextTestBatch(testDataSize)
+    const testxs = testData.xs.reshape([
+      testDataSize,
+      IMAGE_WIDTH,
+      IMAGE_HEIGHT,
+      1,
+    ])
+    const labels = testData.labels.argMax([-1])
+
+    const preds = model.predict(testxs).argMax([-1])
+
+    testxs.dispose()
+    return [preds, labels]
+  }
+
+  async showAccuracy(model, data) {
+    const [preds, labels] = this.doPrediction(model, data)
+    const classAccuracy = await tfvis.metrics.perClassAccuracy(labels, preds)
+    const container = { name: 'Accuracy', tab: 'Evaluation' }
+    tfvis.show.perClassAccuracy(container, classAccuracy, this.classNames)
+
+    labels.dispose()
+  }
+
+  async showConfusion(model, data) {
+    const [preds, labels] = this.doPrediction(model, data)
+    const confusionMatrix = await tfvis.metrics.confusionMatrix(labels, preds)
+    const container = { name: 'Confusion Matrix', tab: 'Evaluation' }
+    tfvis.render.confusionMatrix(
+      container,
+      { values: confusionMatrix },
+      this.classNames
+    )
+
+    labels.dispose()
+  }
+
   async run() {
     const data = new MnistData()
     await data.load()
@@ -146,6 +200,9 @@ class App extends Component {
     tfvis.show.modelSummary({ name: 'Model Architecture' }, model)
 
     await this.train(model, data)
+
+    await this.showAccuracy(model, data)
+    await this.showConfusion(model, data)
   }
 
   render() {
